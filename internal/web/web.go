@@ -5,8 +5,10 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"imapsmtpserver/internal/store"
 )
@@ -147,6 +149,43 @@ func (h *handler) deleteAll(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// events streams a Server-Sent Events feed: an "update" event is pushed
+// whenever the store changes (message added/deleted/cleared/seen-toggled),
+// so the frontend can refetch the list instead of polling for it.
+func (h *handler) events(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	changes, cancel := h.store.Subscribe()
+	defer cancel()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	io.WriteString(w, "event: update\ndata: {}\n\n")
+	flusher.Flush()
+
+	keepalive := time.NewTicker(25 * time.Second)
+	defer keepalive.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-changes:
+			io.WriteString(w, "event: update\ndata: {}\n\n")
+			flusher.Flush()
+		case <-keepalive.C:
+			io.WriteString(w, ": keepalive\n\n")
+			flusher.Flush()
+		}
+	}
+}
+
 // New builds an HTTP server bound to addr (e.g. "127.0.0.1:8025") serving
 // the JSON API under /api/ and the static frontend at /.
 func New(addr string, st *store.Store) *http.Server {
@@ -159,6 +198,7 @@ func New(addr string, st *store.Store) *http.Server {
 	mux.HandleFunc("GET /api/messages/{id}/attachments/{filename}", h.getAttachment)
 	mux.HandleFunc("DELETE /api/messages/{id}", h.deleteMessage)
 	mux.HandleFunc("DELETE /api/messages", h.deleteAll)
+	mux.HandleFunc("GET /api/events", h.events)
 
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {

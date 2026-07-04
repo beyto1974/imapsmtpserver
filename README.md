@@ -11,7 +11,7 @@ Done:
 - [x] `internal/mailparse` — parses raw RFC822 bytes into subject/from/to/date/text/html/attachments using `go-message/mail`
 - [x] `internal/smtpd` — minimal SMTP server (`github.com/emersion/go-smtp`), accepts any sender/recipient, no auth required, parses each message and adds it to the store
 - [x] `internal/imapd` — read-only IMAP server (`github.com/emersion/go-imap`), single hardcoded user (any username/password), single `INBOX` mailbox backed by `internal/store`
-- [x] `internal/web` — REST API + embedded static frontend (list, view html/text/raw, download attachment, clear one, clear all)
+- [x] `internal/web` — REST API + embedded static frontend (list, view html/text/raw, download attachment, clear one, clear all), live updates over Server-Sent Events (`GET /api/events`)
 - [x] `cmd/imapsmtpserver/main.go` — wires SMTP + IMAP + web servers together, graceful shutdown on SIGINT/SIGTERM
 - [x] End-to-end test (`cmd/imapsmtpserver/e2e_test.go`): sends a mail via SMTP, checks it in the web API, fetches it via IMAP, clears it via the web API
 
@@ -45,5 +45,8 @@ internal/web/         HTTP API + static frontend (internal/web/static)
   persistence to back them.
 - `CreateMessage`/`CopyMessages` on the IMAP mailbox return an error — mail
   only arrives via SMTP, this is a read-only mailbox by design.
-- The web frontend polls `/api/messages` every 3s rather than pushing
-  updates; fine for a dev tool, would need SSE/WebSockets otherwise.
+- The web frontend gets live updates via `GET /api/events` (SSE): the
+  backend pushes an `update` event whenever the store changes, and the
+  frontend refetches `/api/messages` in response. `EventSource` reconnects
+  automatically on drop; polling is only used as a fallback if the browser
+  doesn't support SSE.

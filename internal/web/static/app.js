@@ -100,4 +100,12 @@ document.getElementById("clear-all").addEventListener("click", async () => {
 });
 
 refreshList();
-setInterval(refreshList, 3000);
+
+// EventSource reconnects automatically on drop; fall back to polling only
+// if the browser doesn't support SSE at all.
+if (typeof EventSource !== "undefined") {
+  const events = new EventSource("/api/events");
+  events.addEventListener("update", refreshList);
+} else {
+  setInterval(refreshList, 3000);
+}
