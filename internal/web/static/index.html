@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ImapSmtpServer</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>ImapSmtpServer</h1>
+  <button id="clear-all">Clear all</button>
+</header>
+<main>
+  <section id="list-pane">
+    <ul id="message-list"></ul>
+  </section>
+  <section id="detail-pane">
+    <p id="empty-state">Select a message to view it.</p>
+    <div id="detail" hidden>
+      <div id="detail-header">
+        <h2 id="detail-subject"></h2>
+        <dl>
+          <dt>From</dt><dd id="detail-from"></dd>
+          <dt>To</dt><dd id="detail-to"></dd>
+          <dt>Date</dt><dd id="detail-date"></dd>
+        </dl>
+        <button id="detail-clear">Clear this message</button>
+      </div>
+      <div id="tabs">
+        <button class="tab-btn active" data-tab="html">HTML</button>
+        <button class="tab-btn" data-tab="text">Text</button>
+        <button class="tab-btn" data-tab="raw">Raw</button>
+      </div>
+      <div id="tab-html" class="tab-panel active">
+        <iframe id="html-frame" sandbox></iframe>
+      </div>
+      <pre id="tab-text" class="tab-panel"></pre>
+      <pre id="tab-raw" class="tab-panel"></pre>
+      <ul id="attachments"></ul>
+    </div>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
