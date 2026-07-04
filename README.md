@@ -50,9 +50,10 @@ Then:
 ## Releases
 
 Pushing a tag matching `v*.*.*` (e.g. `v0.1.0`) triggers
-`.github/workflows/release.yml`, which builds `imapsmtpserver` for
-linux/amd64, linux/arm64, windows/amd64, darwin/amd64 and darwin/arm64, and
-attaches the archives to a GitHub Release for that tag.
+`.github/workflows/release.yml`, which first runs `go vet`/`go test`, then
+(only if that passes) builds `imapsmtpserver` for linux/amd64, linux/arm64,
+windows/amd64, darwin/amd64 and darwin/arm64, and attaches the archives to a
+GitHub Release for that tag.
 
 ## Layout
 
