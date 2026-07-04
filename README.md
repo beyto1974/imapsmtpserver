@@ -30,6 +30,13 @@ go build ./...
 go run ./cmd/imapsmtpserver
 ```
 
+Ports default to 1025 (SMTP), 1143 (IMAP) and 8025 (web), and can be
+overridden:
+
+```sh
+go run ./cmd/imapsmtpserver -smtp-port 2525 -imap-port 1144 -web-port 8080
+```
+
 Then:
 - Send test mail to `localhost:1025` (no auth) — e.g. `swaks --to a@b.test --server localhost:1025`
 - Open `http://localhost:8025` for the web UI — pick an account from the

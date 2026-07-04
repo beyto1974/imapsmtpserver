@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,12 +20,17 @@ import (
 )
 
 func main() {
+	smtpPort := flag.Int("smtp-port", 1025, "SMTP server port")
+	imapPort := flag.Int("imap-port", 1143, "IMAP server port")
+	webPort := flag.Int("web-port", 8025, "web UI/API port")
+	flag.Parse()
+
 	st := store.New()
 
-	const smtpAddr = "127.0.0.1:1025"
+	smtpAddr := fmt.Sprintf("127.0.0.1:%d", *smtpPort)
 	smtpSrv := smtpd.New(smtpAddr, st)
-	imapSrv := imapd.New("127.0.0.1:1143", st)
-	webSrv := web.New("127.0.0.1:8025", st, smtpAddr)
+	imapSrv := imapd.New(fmt.Sprintf("127.0.0.1:%d", *imapPort), st)
+	webSrv := web.New(fmt.Sprintf("127.0.0.1:%d", *webPort), st, smtpAddr)
 
 	go func() {
 		log.Printf("smtp: listening on %s", smtpSrv.Addr)
