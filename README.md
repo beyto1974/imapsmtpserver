@@ -84,3 +84,7 @@ internal/web/         HTTP API + static frontend (internal/web/static)
   address is well-formed beyond basic parsing.
 - `POST /api/send` builds a plain-text-only RFC822 message; there's no rich
   text/HTML compose or attachment upload from the web UI yet.
+
+## License
+
+[MIT](LICENSE)
