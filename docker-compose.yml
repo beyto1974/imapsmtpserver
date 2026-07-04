@@ -1,0 +1,7 @@
+services:
+  imapsmtpserver:
+    build: .
+    ports:
+      - "1025:1025" # SMTP
+      - "1143:1143" # IMAP
+      - "8025:8025" # web UI/API

@@ -23,6 +23,7 @@ Done:
 - [x] `cmd/imapsmtpserver/main.go` — wires SMTP + IMAP + web servers together, graceful shutdown on SIGINT/SIGTERM, ports configurable via `-smtp-port`/`-imap-port`/`-web-port`
 - [x] End-to-end tests (`cmd/imapsmtpserver/e2e_test.go`): single-account SMTP → web → IMAP → clear flow, and a multi-account test that sends alice → bob, replies bob → alice, and checks each account's IMAP INBOX/Sent are correctly isolated
 - [x] `.github/workflows/release.yml` — on pushing a `v*.*.*` tag, cross-compiles binaries for linux/windows/darwin (amd64 + arm64, except windows/arm64) and uploads them to a GitHub Release
+- [x] `Dockerfile` / `docker-compose.yml` — multi-stage build onto a distroless base image, `-host 0.0.0.0` so the mapped ports are reachable from the host
 
 ## Running
 
@@ -32,11 +33,22 @@ go run ./cmd/imapsmtpserver
 ```
 
 Ports default to 1025 (SMTP), 1143 (IMAP) and 8025 (web), and can be
-overridden:
+overridden, along with the bind address (`-host`, default `127.0.0.1`):
 
 ```sh
 go run ./cmd/imapsmtpserver -smtp-port 2525 -imap-port 1144 -web-port 8080
 ```
+
+Or with Docker Compose:
+
+```sh
+docker compose up --build
+```
+
+which builds the image and maps ports 1025/1143/8025 to the host. The
+container runs with `-host 0.0.0.0` so it's reachable from outside; the web
+UI's own compose/reply feature still submits over loopback inside the
+container regardless of `-host`.
 
 Then:
 - Send test mail to `localhost:1025` (no auth) — e.g. `swaks --to a@b.test --server localhost:1025`
@@ -64,6 +76,8 @@ internal/mailparse/   RFC822 -> store.Message parsing
 internal/smtpd/       SMTP server
 internal/imapd/       IMAP server (read-only, per-account, backed by internal/store)
 internal/web/         HTTP API + static frontend (internal/web/static)
+Dockerfile            multi-stage build (golang -> distroless static)
+docker-compose.yml    maps ports 1025/1143/8025 to the host
 ```
 
 ## Notes for future work
