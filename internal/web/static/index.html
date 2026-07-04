@@ -8,10 +8,22 @@
 <body>
 <header>
   <h1>ImapSmtpServer</h1>
-  <button id="clear-all">Clear all</button>
+  <div id="header-actions">
+    <button id="compose-btn">Compose</button>
+    <button id="clear-all">Clear all</button>
+  </div>
 </header>
 <main>
   <section id="list-pane">
+    <div id="account-bar">
+      <select id="account-select">
+        <option value="">All mail</option>
+      </select>
+      <div id="folder-tabs" hidden>
+        <button class="folder-btn active" data-folder="inbox">Inbox</button>
+        <button class="folder-btn" data-folder="sent">Sent</button>
+      </div>
+    </div>
     <ul id="message-list"></ul>
   </section>
   <section id="detail-pane">
@@ -24,6 +36,7 @@
           <dt>To</dt><dd id="detail-to"></dd>
           <dt>Date</dt><dd id="detail-date"></dd>
         </dl>
+        <button id="detail-reply">Reply</button>
         <button id="detail-clear">Clear this message</button>
       </div>
       <div id="tabs">
@@ -40,6 +53,21 @@
     </div>
   </section>
 </main>
+<div id="compose-overlay" hidden>
+  <form id="compose-form">
+    <h2>New message</h2>
+    <label>From <input type="text" id="compose-from" list="account-datalist" required></label>
+    <datalist id="account-datalist"></datalist>
+    <label>To <input type="text" id="compose-to" required></label>
+    <label>Subject <input type="text" id="compose-subject"></label>
+    <label>Message <textarea id="compose-text" rows="10"></textarea></label>
+    <p id="compose-error" hidden></p>
+    <div id="compose-actions">
+      <button type="submit">Send</button>
+      <button type="button" id="compose-cancel">Cancel</button>
+    </div>
+  </form>
+</div>
 <script src="/app.js"></script>
 </body>
 </html>

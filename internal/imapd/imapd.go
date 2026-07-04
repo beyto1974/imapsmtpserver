@@ -1,7 +1,8 @@
 // Package imapd is a minimal read-only IMAP server backed by
 // internal/store.Store. Any username/password is accepted (dev tool, no real
-// auth); there is a single mailbox, "INBOX", populated only by mail received
-// over SMTP.
+// auth); the login username selects which account's mail is visible, with
+// two mailboxes per account: "INBOX" (mail received by that address) and
+// "Sent" (mail sent from that address, e.g. via the web UI's compose/reply).
 package imapd
 
 import (
@@ -27,25 +28,32 @@ type imapBackend struct {
 }
 
 func (b *imapBackend) Login(_ *imap.ConnInfo, username, password string) (backend.User, error) {
-	return &imapUser{username: username, store: b.store}, nil
+	return &imapUser{account: store.NormalizeAddress(username), store: b.store}, nil
 }
 
 type imapUser struct {
-	username string
-	store    *store.Store
+	account string
+	store   *store.Store
 }
 
-func (u *imapUser) Username() string { return u.username }
+func (u *imapUser) Username() string { return u.account }
 
 func (u *imapUser) ListMailboxes(subscribed bool) ([]backend.Mailbox, error) {
-	return []backend.Mailbox{&mailbox{store: u.store}}, nil
+	return []backend.Mailbox{
+		&mailbox{store: u.store, account: u.account, name: "INBOX", folder: folderInbox},
+		&mailbox{store: u.store, account: u.account, name: "Sent", folder: folderSent},
+	}, nil
 }
 
 func (u *imapUser) GetMailbox(name string) (backend.Mailbox, error) {
-	if name != "INBOX" {
+	switch name {
+	case "INBOX":
+		return &mailbox{store: u.store, account: u.account, name: "INBOX", folder: folderInbox}, nil
+	case "Sent":
+		return &mailbox{store: u.store, account: u.account, name: "Sent", folder: folderSent}, nil
+	default:
 		return nil, backend.ErrNoSuchMailbox
 	}
-	return &mailbox{store: u.store}, nil
 }
 
 func (u *imapUser) CreateMailbox(name string) error          { return errReadOnly }
@@ -53,14 +61,33 @@ func (u *imapUser) DeleteMailbox(name string) error          { return errReadOnl
 func (u *imapUser) RenameMailbox(existing, new string) error { return errReadOnly }
 func (u *imapUser) Logout() error                            { return nil }
 
+type folder int
+
+const (
+	folderInbox folder = iota
+	folderSent
+)
+
 type mailbox struct {
-	store *store.Store
+	store   *store.Store
+	account string
+	name    string
+	folder  folder
 }
 
-func (mbox *mailbox) Name() string { return "INBOX" }
+// messages returns this mailbox's messages: the account's received mail for
+// INBOX, or its sent mail for Sent.
+func (mbox *mailbox) messages() []*store.Message {
+	if mbox.folder == folderSent {
+		return mbox.store.Sent(mbox.account)
+	}
+	return mbox.store.Inbox(mbox.account)
+}
+
+func (mbox *mailbox) Name() string { return mbox.name }
 
 func (mbox *mailbox) Info() (*imap.MailboxInfo, error) {
-	return &imap.MailboxInfo{Delimiter: "/", Name: "INBOX"}, nil
+	return &imap.MailboxInfo{Delimiter: "/", Name: mbox.name}, nil
 }
 
 func (mbox *mailbox) unseenSeqNum(messages []*store.Message) uint32 {
@@ -73,9 +100,9 @@ func (mbox *mailbox) unseenSeqNum(messages []*store.Message) uint32 {
 }
 
 func (mbox *mailbox) Status(items []imap.StatusItem) (*imap.MailboxStatus, error) {
-	messages := mbox.store.List()
+	messages := mbox.messages()
 
-	status := imap.NewMailboxStatus("INBOX", items)
+	status := imap.NewMailboxStatus(mbox.name, items)
 	status.Flags = []string{imap.SeenFlag}
 	status.PermanentFlags = []string{imap.SeenFlag}
 	status.UnseenSeqNum = mbox.unseenSeqNum(messages)
@@ -153,7 +180,7 @@ func fetchMessage(msg *store.Message, uid uint32, seqNum uint32, items []imap.Fe
 func (mbox *mailbox) ListMessages(uid bool, seqset *imap.SeqSet, items []imap.FetchItem, ch chan<- *imap.Message) error {
 	defer close(ch)
 
-	messages := mbox.store.List()
+	messages := mbox.messages()
 	for i, msg := range messages {
 		seqNum := uint32(i + 1)
 		msgUID := mbox.store.UID(msg.ID)
@@ -177,7 +204,7 @@ func (mbox *mailbox) ListMessages(uid bool, seqset *imap.SeqSet, items []imap.Fe
 }
 
 func (mbox *mailbox) SearchMessages(uid bool, criteria *imap.SearchCriteria) ([]uint32, error) {
-	messages := mbox.store.List()
+	messages := mbox.messages()
 
 	var ids []uint32
 	for i, msg := range messages {
@@ -213,7 +240,7 @@ func (mbox *mailbox) CreateMessage(flags []string, date time.Time, body imap.Lit
 }
 
 func (mbox *mailbox) UpdateMessagesFlags(uid bool, seqset *imap.SeqSet, op imap.FlagsOp, flags []string) error {
-	messages := mbox.store.List()
+	messages := mbox.messages()
 
 	seen := false
 	for _, f := range flags {

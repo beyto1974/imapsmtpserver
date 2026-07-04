@@ -1,6 +1,9 @@
 package store
 
 import (
+	"net/mail"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,6 +19,8 @@ type Attachment struct {
 // (for IMAP clients that want the original RFC822 bytes).
 type Message struct {
 	ID          string
+	MessageID   string // RFC822 Message-Id header, without angle brackets; empty if absent
+	InReplyTo   string // RFC822 Message-Id this message is a reply to, if any
 	From        string
 	To          []string
 	Subject     string
@@ -26,6 +31,16 @@ type Message struct {
 	Raw         []byte
 	Size        int
 	Seen        bool
+}
+
+// NormalizeAddress extracts and lowercases the bare email address from a
+// possibly "Name <addr>"-formatted string, so messages can be matched to
+// accounts regardless of how the address was formatted.
+func NormalizeAddress(raw string) string {
+	if a, err := mail.ParseAddress(raw); err == nil {
+		return strings.ToLower(a.Address)
+	}
+	return strings.ToLower(strings.TrimSpace(raw))
 }
 
 // Store is a simple in-memory mailbox. It is intentionally not persisted to
@@ -163,4 +178,64 @@ func (s *Store) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.messages)
+}
+
+// Accounts returns the distinct set of normalized addresses seen across all
+// messages' From/To fields, sorted. There is no explicit account
+// registration - any address that has sent or received mail is an account.
+func (s *Store) Accounts() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	set := make(map[string]struct{})
+	for _, m := range s.messages {
+		if from := NormalizeAddress(m.From); from != "" {
+			set[from] = struct{}{}
+		}
+		for _, to := range m.To {
+			if addr := NormalizeAddress(to); addr != "" {
+				set[addr] = struct{}{}
+			}
+		}
+	}
+
+	out := make([]string, 0, len(set))
+	for a := range set {
+		out = append(out, a)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Inbox returns messages addressed to addr, in the order they were received.
+func (s *Store) Inbox(addr string) []*Message {
+	addr = NormalizeAddress(addr)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var out []*Message
+	for _, m := range s.messages {
+		for _, to := range m.To {
+			if NormalizeAddress(to) == addr {
+				out = append(out, m)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// Sent returns messages sent from addr, in the order they were received.
+func (s *Store) Sent(addr string) []*Message {
+	addr = NormalizeAddress(addr)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var out []*Message
+	for _, m := range s.messages {
+		if NormalizeAddress(m.From) == addr {
+			out = append(out, m)
+		}
+	}
+	return out
 }

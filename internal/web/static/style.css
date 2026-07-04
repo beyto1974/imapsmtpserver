@@ -20,6 +20,8 @@ header {
 
 header h1 { font-size: 1.1rem; margin: 0; }
 
+#header-actions { display: flex; gap: 0.5rem; }
+
 button {
   cursor: pointer;
   border: 1px solid #ccc;
@@ -40,6 +42,25 @@ main {
   overflow-y: auto;
   border-right: 1px solid #ddd;
 }
+
+#account-bar {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#account-select {
+  width: 100%;
+  padding: 0.3rem;
+  font-size: 0.85rem;
+}
+
+#folder-tabs { display: flex; gap: 0.4rem; }
+#folder-tabs[hidden] { display: none; }
+
+.folder-btn.active { background: #e8f0fe; border-color: #a8c7fa; }
 
 #message-list {
   list-style: none;
@@ -114,3 +135,57 @@ main {
 }
 
 #attachments li { padding: 0.2rem 0; }
+
+#detail-header button { margin-top: 0.4rem; margin-right: 0.4rem; }
+
+#compose-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+#compose-overlay[hidden] { display: none; }
+
+#compose-form {
+  background: #fff;
+  border-radius: 6px;
+  padding: 1.2rem;
+  width: min(500px, 90vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+#compose-form h2 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+
+#compose-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #444;
+}
+
+#compose-form input, #compose-form textarea {
+  font: inherit;
+  padding: 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-weight: 400;
+  color: #1a1a1a;
+}
+
+#compose-error {
+  color: #c0341d;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+#compose-actions { display: flex; gap: 0.5rem; }

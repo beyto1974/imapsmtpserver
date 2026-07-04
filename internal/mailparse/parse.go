@@ -50,6 +50,12 @@ func Parse(raw []byte, envelopeFrom string, envelopeTo []string) (*store.Message
 	if date, err := reader.Header.Date(); err == nil && !date.IsZero() {
 		m.Date = date
 	}
+	if msgID, err := reader.Header.MessageID(); err == nil {
+		m.MessageID = msgID
+	}
+	if refs, err := reader.Header.MsgIDList("In-Reply-To"); err == nil && len(refs) > 0 {
+		m.InReplyTo = refs[0]
+	}
 
 	for {
 		part, err := reader.NextPart()

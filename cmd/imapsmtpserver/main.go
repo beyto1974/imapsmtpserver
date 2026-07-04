@@ -20,9 +20,10 @@ import (
 func main() {
 	st := store.New()
 
-	smtpSrv := smtpd.New("127.0.0.1:1025", st)
+	const smtpAddr = "127.0.0.1:1025"
+	smtpSrv := smtpd.New(smtpAddr, st)
 	imapSrv := imapd.New("127.0.0.1:1143", st)
-	webSrv := web.New("127.0.0.1:8025", st)
+	webSrv := web.New("127.0.0.1:8025", st, smtpAddr)
 
 	go func() {
 		log.Printf("smtp: listening on %s", smtpSrv.Addr)
