@@ -20,8 +20,9 @@ Done:
 - [x] `internal/smtpd` — minimal SMTP server (`github.com/emersion/go-smtp`), accepts any sender/recipient, no auth required, parses each message and adds it to the store
 - [x] `internal/imapd` — read-only IMAP server (`github.com/emersion/go-imap`); the login username selects the account, exposing that account's `INBOX` (received) and `Sent` (sent) mailboxes
 - [x] `internal/web` — REST API + embedded static frontend: list/view/download/clear mail, browse by account/folder, compose and reply (`POST /api/send`), live updates over Server-Sent Events (`GET /api/events`)
-- [x] `cmd/imapsmtpserver/main.go` — wires SMTP + IMAP + web servers together, graceful shutdown on SIGINT/SIGTERM
+- [x] `cmd/imapsmtpserver/main.go` — wires SMTP + IMAP + web servers together, graceful shutdown on SIGINT/SIGTERM, ports configurable via `-smtp-port`/`-imap-port`/`-web-port`
 - [x] End-to-end tests (`cmd/imapsmtpserver/e2e_test.go`): single-account SMTP → web → IMAP → clear flow, and a multi-account test that sends alice → bob, replies bob → alice, and checks each account's IMAP INBOX/Sent are correctly isolated
+- [x] `.github/workflows/release.yml` — on pushing a `v*.*.*` tag, cross-compiles binaries for linux/windows/darwin (amd64 + arm64, except windows/arm64) and uploads them to a GitHub Release
 
 ## Running
 
@@ -45,6 +46,13 @@ Then:
 - Point a mail client at `localhost:1143`, logging in as the account address
   you want to browse (any password) — `INBOX` and `Sent` are separate
   mailboxes
+
+## Releases
+
+Pushing a tag matching `v*.*.*` (e.g. `v0.1.0`) triggers
+`.github/workflows/release.yml`, which builds `imapsmtpserver` for
+linux/amd64, linux/arm64, windows/amd64, darwin/amd64 and darwin/arm64, and
+attaches the archives to a GitHub Release for that tag.
 
 ## Layout
 
