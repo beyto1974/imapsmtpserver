@@ -18,10 +18,10 @@ Done:
 - [x] `internal/store` — thread-safe in-memory message store (add/list/get/delete/clear, UID tracking for IMAP, `\Seen` flag), plus per-account `Inbox`/`Sent` views and change notifications for SSE
 - [x] `internal/mailparse` — parses raw RFC822 bytes into subject/from/to/date/text/html/attachments/Message-Id/In-Reply-To using `go-message/mail`
 - [x] `internal/smtpd` — minimal SMTP server (`github.com/emersion/go-smtp`), accepts any sender/recipient, no auth required, parses each message and adds it to the store
-- [x] `internal/imapd` — read-only IMAP server (`github.com/emersion/go-imap`); the login username selects the account, exposing that account's `INBOX` (received) and `Sent` (sent) mailboxes
+- [x] `internal/imapd` — IMAP server (`github.com/emersion/go-imap`); the login username selects the account, exposing that account's `INBOX` (received) and `Sent` (sent) mailboxes. Mail normally arrives via SMTP, but `APPEND` is also supported directly into either mailbox (mailbox management and `COPY` remain unsupported)
 - [x] `internal/web` — REST API + embedded static frontend: list/view/download/clear mail, browse by account/folder, compose and reply (`POST /api/send`), live updates over Server-Sent Events (`GET /api/events`)
 - [x] `cmd/imapsmtpserver/main.go` — wires SMTP + IMAP + web servers together, graceful shutdown on SIGINT/SIGTERM, ports configurable via `-smtp-port`/`-imap-port`/`-web-port`
-- [x] End-to-end tests (`cmd/imapsmtpserver/e2e_test.go`): single-account SMTP → web → IMAP → clear flow, and a multi-account test that sends alice → bob, replies bob → alice, and checks each account's IMAP INBOX/Sent are correctly isolated
+- [x] End-to-end tests (`cmd/imapsmtpserver/e2e_test.go`): single-account SMTP → web → IMAP → clear flow, a multi-account test that sends alice → bob, replies bob → alice, and checks each account's IMAP INBOX/Sent are correctly isolated, and an IMAP `APPEND` test covering both mailboxes
 - [x] `.github/workflows/release.yml` — on pushing a `v*.*.*` tag, cross-compiles binaries for linux/windows/darwin (amd64 + arm64, except windows/arm64) and uploads them to a GitHub Release
 - [x] `Dockerfile` / `docker-compose.yml` — multi-stage build onto a distroless base image, `-host 0.0.0.0` so the mapped ports are reachable from the host
 
@@ -38,6 +38,15 @@ overridden, along with the bind address (`-host`, default `127.0.0.1`):
 ```sh
 go run ./cmd/imapsmtpserver -smtp-port 2525 -imap-port 1144 -web-port 8080
 ```
+
+| Flag          | Default     | Description                                                                                  |
+| ------------- | ----------- | ---------------------------------------------------------------------------------------------|
+| `-host`       | `127.0.0.1` | Address to bind the SMTP/IMAP/web servers to. Use `0.0.0.0` to accept connections from other hosts (e.g. in Docker). |
+| `-smtp-port`  | `1025`      | SMTP server port.                                                                             |
+| `-imap-port`  | `1143`      | IMAP server port.                                                                             |
+| `-web-port`   | `8025`      | Web UI/API port.                                                                              |
+
+Run `go run ./cmd/imapsmtpserver -h` to see this from the binary itself.
 
 Or with Docker Compose:
 
@@ -74,7 +83,7 @@ cmd/imapsmtpserver/   main.go (entrypoint), e2e_test.go
 internal/store/       in-memory message store, per-account inbox/sent views
 internal/mailparse/   RFC822 -> store.Message parsing
 internal/smtpd/       SMTP server
-internal/imapd/       IMAP server (read-only, per-account, backed by internal/store)
+internal/imapd/       IMAP server (per-account, backed by internal/store, supports APPEND)
 internal/web/         HTTP API + static frontend (internal/web/static)
 Dockerfile            multi-stage build (golang -> distroless static)
 docker-compose.yml    maps ports 1025/1143/8025 to the host
@@ -85,9 +94,19 @@ docker-compose.yml    maps ports 1025/1143/8025 to the host
 - The IMAP backend only tracks the `\Seen` flag; other flag updates (e.g.
   `\Deleted`, `\Flagged`) are accepted but silently dropped since there's no
   persistence to back them.
-- `CreateMessage`/`CopyMessages` on the IMAP mailbox return an error — mail
-  only arrives via SMTP (directly, or looped back through the web UI's
-  send/reply), this is a read-only mailbox by design.
+- IMAP `APPEND` is supported (`CreateMessage`), letting mail clients file
+  messages directly - e.g. a Sent copy after submitting over SMTP
+  separately, or migrating old mail into INBOX. Since INBOX/Sent are
+  filters over From/To rather than physical folders, appending forces the
+  logged-in account into the right field (Sent: overwrites From; INBOX:
+  adds the account as a recipient if missing) so the message is guaranteed
+  to show up in the mailbox it was appended to. `CopyMessages` and mailbox
+  management (create/delete/rename) remain unsupported. Because Sent is
+  derived from the same store SMTP writes to, a mail client's normal habit
+  of submitting over SMTP and then separately APPENDing an identical Sent
+  copy would otherwise show up as a duplicate; appends whose Message-Id
+  matches an already-stored message are recognized as "already filed"
+  instead of stored again (`store.FindByMessageID`).
 - The web frontend gets live updates via `GET /api/events` (SSE): the
   backend pushes an `update` event whenever the store changes, and the
   frontend refetches the current list in response. `EventSource` reconnects

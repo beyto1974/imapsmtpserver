@@ -118,6 +118,24 @@ func (s *Store) Get(id string) *Message {
 	return nil
 }
 
+// FindByMessageID returns the message with the given RFC822 Message-Id
+// (without angle brackets), or nil if none is stored. Used to recognize a
+// message a client already submitted over SMTP and is now re-filing via
+// IMAP APPEND (e.g. a Sent copy), so it isn't stored twice.
+func (s *Store) FindByMessageID(id string) *Message {
+	if id == "" {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, m := range s.messages {
+		if m.MessageID == id {
+			return m
+		}
+	}
+	return nil
+}
+
 func (s *Store) UID(id string) uint32 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

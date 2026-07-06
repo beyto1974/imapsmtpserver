@@ -1,14 +1,19 @@
-// Package imapd is a minimal read-only IMAP server backed by
-// internal/store.Store. Any username/password is accepted (dev tool, no real
-// auth); the login username selects which account's mail is visible, with
-// two mailboxes per account: "INBOX" (mail received by that address) and
-// "Sent" (mail sent from that address, e.g. via the web UI's compose/reply).
+// Package imapd is a minimal IMAP server backed by internal/store.Store. Any
+// username/password is accepted (dev tool, no real auth); the login username
+// selects which account's mail is visible, with two mailboxes per account:
+// "INBOX" (mail received by that address) and "Sent" (mail sent from that
+// address, e.g. via the web UI's compose/reply or an APPEND). Mail normally
+// arrives via SMTP, but clients may also APPEND directly into either
+// mailbox (e.g. a desktop client filing a Sent copy after submitting over
+// SMTP separately); mailbox management (create/delete/rename) and COPY
+// remain unsupported.
 package imapd
 
 import (
 	"bufio"
 	"bytes"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/emersion/go-imap"
@@ -18,6 +23,7 @@ import (
 	"github.com/emersion/go-message"
 	"github.com/emersion/go-message/textproto"
 
+	"imapsmtpserver/internal/mailparse"
 	"imapsmtpserver/internal/store"
 )
 
@@ -235,8 +241,67 @@ func (mbox *mailbox) SearchMessages(uid bool, criteria *imap.SearchCriteria) ([]
 	return ids, nil
 }
 
+// CreateMessage implements APPEND: the appended bytes are parsed exactly
+// like incoming SMTP mail, then filed so it's guaranteed to actually show up
+// in the mailbox it was appended to - INBOX appends ensure the account is a
+// recipient, Sent appends force the account as the sender - since store.Inbox
+// / store.Sent are just filters over From/To, not separate physical folders.
+//
+// Mail clients conventionally submit a message over SMTP and then separately
+// APPEND the identical bytes into their IMAP "Sent" mailbox to keep a local
+// copy - which on a real server populates a folder that SMTP submission
+// never touches. Here, Sent is derived from the same store SMTP already
+// writes to, so that append would otherwise create a visible duplicate of
+// the message just sent. Since the client preserves the Message-Id between
+// the two, a matching existing message is treated as "already filed" rather
+// than stored again.
 func (mbox *mailbox) CreateMessage(flags []string, date time.Time, body imap.Literal) error {
-	return errReadOnly
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+
+	msg, err := mailparse.Parse(raw, "", nil)
+	if err != nil {
+		return err
+	}
+
+	if existing := mbox.store.FindByMessageID(msg.MessageID); existing != nil {
+		for _, f := range flags {
+			if f == imap.SeenFlag {
+				mbox.store.SetSeen(existing.ID, true)
+			}
+		}
+		return nil
+	}
+
+	if !date.IsZero() {
+		msg.Date = date
+	}
+	for _, f := range flags {
+		if f == imap.SeenFlag {
+			msg.Seen = true
+		}
+	}
+
+	if mbox.folder == folderSent {
+		msg.From = "<" + mbox.account + ">"
+	} else if !containsAddress(msg.To, mbox.account) {
+		msg.To = append(msg.To, "<"+mbox.account+">")
+	}
+
+	mbox.store.Add(msg)
+	return nil
+}
+
+func containsAddress(addrs []string, addr string) bool {
+	addr = store.NormalizeAddress(addr)
+	for _, a := range addrs {
+		if store.NormalizeAddress(a) == addr {
+			return true
+		}
+	}
+	return false
 }
 
 func (mbox *mailbox) UpdateMessagesFlags(uid bool, seqset *imap.SeqSet, op imap.FlagsOp, flags []string) error {
