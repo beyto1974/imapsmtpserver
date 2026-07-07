@@ -22,7 +22,7 @@ Done:
 - [x] `internal/web` — REST API + embedded static frontend: list/view/download/clear mail, browse by account/folder, compose and reply (`POST /api/send`), live updates over Server-Sent Events (`GET /api/events`)
 - [x] `cmd/imapsmtpserver/main.go` — wires SMTP + IMAP + web servers together, graceful shutdown on SIGINT/SIGTERM, ports configurable via `-smtp-port`/`-imap-port`/`-web-port`
 - [x] End-to-end tests (`cmd/imapsmtpserver/e2e_test.go`): single-account SMTP → web → IMAP → clear flow, a multi-account test that sends alice → bob, replies bob → alice, and checks each account's IMAP INBOX/Sent are correctly isolated, and an IMAP `APPEND` test covering both mailboxes
-- [x] `.github/workflows/release.yml` — on pushing a `v*.*.*` tag, cross-compiles binaries for linux/windows/darwin (amd64 + arm64, except windows/arm64) and uploads them to a GitHub Release
+- [x] `.github/workflows/release.yml` — on pushing a `v*.*.*` tag, cross-compiles binaries for linux/windows/darwin (amd64 + arm64, except windows/arm64) and uploads them to a GitHub Release, and builds/pushes a multi-arch Docker image to GHCR
 - [x] `Dockerfile` / `docker-compose.yml` — multi-stage build onto a distroless base image, `-host 0.0.0.0` so the mapped ports are reachable from the host
 
 ## Running
@@ -59,6 +59,25 @@ container runs with `-host 0.0.0.0` so it's reachable from outside; the web
 UI's own compose/reply feature still submits over loopback inside the
 container regardless of `-host`.
 
+## Deploying with Docker
+
+Tagged releases (`v*.*.*`) are published as a multi-arch (`linux/amd64`,
+`linux/arm64`) image to GitHub Container Registry:
+
+```sh
+docker run -d \
+  -p 1025:1025 -p 1143:1143 -p 8025:8025 \
+  ghcr.io/beyto1974/imapsmtpserver:latest
+```
+
+Available tags: `latest`, a full version (`1.2.3`), and a major.minor
+(`1.2`) — all pointing at the same image for a given release. There's no
+`:v0.1.0`-style tag; the leading `v` from the git tag is stripped. See
+[Releases](#releases) for how these get built.
+
+Or point `docker-compose.yml` at the published image instead of building
+locally, by replacing `build: .` with `image: ghcr.io/beyto1974/imapsmtpserver:latest`.
+
 Then:
 - Send test mail to `localhost:1025` (no auth) — e.g. `swaks --to a@b.test --server localhost:1025`
 - Open `http://localhost:8025` for the web UI — pick an account from the
@@ -72,9 +91,13 @@ Then:
 
 Pushing a tag matching `v*.*.*` (e.g. `v0.1.0`) triggers
 `.github/workflows/release.yml`, which first runs `go vet`/`go test`, then
-(only if that passes) builds `imapsmtpserver` for linux/amd64, linux/arm64,
-windows/amd64, darwin/amd64 and darwin/arm64, and attaches the archives to a
-GitHub Release for that tag.
+(only if that passes):
+- builds `imapsmtpserver` for linux/amd64, linux/arm64, windows/amd64,
+  darwin/amd64 and darwin/arm64, and attaches the archives to a GitHub
+  Release for that tag
+- builds and pushes a multi-arch (`linux/amd64`, `linux/arm64`) Docker image
+  to `ghcr.io/beyto1974/imapsmtpserver`, tagged with the version, the
+  major.minor, and `latest` — see [Deploying with Docker](#deploying-with-docker)
 
 ## Layout
 
